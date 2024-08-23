@@ -440,6 +440,15 @@ struct perturbations
 
   ErrorMsg error_message; /**< zone for writing error messages */
 
+// SG - Nutrino self-interaction parameters.
+ int x1_size;
+ int l_size;
+ double * x1;
+ double * lv;
+ double * coeff;
+ double * ddcoeff;
+ double * coeff_interp;
+
   //@}
 
 };
@@ -968,6 +977,36 @@ extern "C" {
                                             struct perturbations_workspace * ppw,
                                             ErrorMsg error_message
                                             );
+
+// SG - interacting neutrinos
+
+  int read_and_store_collision_int_coeff_massive(
+                                            struct precision * ppr,
+                                            struct perturbations * ppt
+  );
+
+  int get_collision_int_coeff_massive(
+                                            struct perturbations * ppt,
+                                            double x1,
+                                            // double l,
+                                            double * coeff_interp
+
+  );
+
+  int read_and_store_collision_int_coeff_massless(
+                                            struct precision * ppr,
+                                            struct perturbations * ppt
+  );
+
+  int free_collision_int_coeff_massive(struct perturbations * ppt);
+  int free_collision_int_coeff_massless(struct perturbations * ppt);
+
+
+// Conversion factors :SG
+
+#define _K_to_Mpc_inv_ 1.34588e25 /**< K to Mpc^-1 conversion  */
+#define _MeV_to_K   1.16e10 /**< MeV to K conversion  */
+
 
 #ifdef __cplusplus
 }

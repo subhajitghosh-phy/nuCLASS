@@ -2697,6 +2697,26 @@ int input_read_parameters_species(struct file_content * pfc,
     class_test(Omega_m_remaining < pba->Omega0_ncdm_tot, errmsg, "Too much energy density from massive species. At this point only %e is left for Omega_m, but requested 'Omega_ncdm = %e' (summed over all species)",Omega_m_remaining, pba->Omega0_ncdm_tot);
     Omega_m_remaining-= pba->Omega0_ncdm_tot;
   }
+//SG -- adding self-interaction
+    // 5.i.1 Read the Geff or log10Geff 
+    
+    class_call(parser_read_double(pfc,"log10_G_eff",&param1,&flag1,errmsg), 
+                errmsg,
+                errmsg);
+    if (flag1 == _TRUE_){
+        pba->Geff = pow(10.0,param1);
+
+        class_call(parser_read_string(pfc,"nuself_type",&string1,&flag1,errmsg),
+               errmsg,
+               errmsg);
+        
+        if ((flag1 == _TRUE_) && ((strstr(string1,"massive")==NULL) || (strstr(string1, "Massive") == NULL))) pba->has_nuself_massive = _TRUE_;
+        else if ((flag1 == _TRUE_) && ((strstr(string1 , "massless") == NULL) || (strstr(string1 , "Massless") == NULL))) pba->has_nuself_massless = _TRUE_;
+        else class_stop(
+               errmsg,
+               "Since you are giving log10_G_eff as the input you must specify 'nuself_type' as either 'massive' or 'massless'. ");
+            }
+    
 
   /** 6) Omega_0_k (effective fractional density of curvature) */
   /* Read */
@@ -5719,6 +5739,12 @@ int input_default_params(struct background *pba,
   pba->varconst_me = 1.;
   pth->bbn_alpha_sensitivity = 1.;
   pba->varconst_transition_redshift = 50.;
+
+  // SG - Neutrino self-interaction
+
+  pba->has_nuself_massive = _FALSE_;
+  pba->has_nuself_massless = _FALSE_;
+  pba->Geff = 0.0;
 
   /**
    * Default to input_read_parameters_species

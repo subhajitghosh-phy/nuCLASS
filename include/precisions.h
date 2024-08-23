@@ -110,6 +110,12 @@ class_precision_parameter(M_nfsm_threshold,double,1.e4)
  */
 class_string_parameter(sBBN_file,"/external/bbn/sBBN_2017.dat","sBBN file")
 
+//SG - Nuself - collision term files
+
+class_string_parameter(coll_massive_file,"/external/nuself/coll_massive.dat","Massive Neutrino collision coefficient file")
+
+class_string_parameter(coll_massless_file,"/external/nuself/coll_massless.dat","Massless Neutrino collision coefficient file")
+
 /*
  *  Thermodynamical quantities
  */

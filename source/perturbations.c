@@ -891,6 +891,16 @@ int perturbations_init(
              ppt->error_message,
              ppt->error_message);
 
+  // if ((pba->has_ncdm == _TRUE_) && ( pba->has_nuself_massive == _TRUE_)) {
+  if (pba->has_ncdm == _TRUE_) {
+      // if ( pba->has_nuself_massive == _TRUE_) {
+        //SG - init the interpolation table read by neutrino self-interaction        
+          read_and_store_collision_int_coeff_massive(ppr,ppt);
+          class_alloc(ppt->coeff_interp,ppt->l_size*sizeof(double),ppt->error_message);
+           // printf("%e  %e  %d----\n",ppt->x1[0],ppt->x1[ppt->x1_size - 1],ppt->x1_size);
+        
+         }
+
   /* Setup task system */
   class_setup_parallel();
   /** - loop over modes (scalar, tensors, etc). For each mode: */
@@ -919,9 +929,10 @@ int perturbations_init(
             if (pba->sgnK != 0)
               printf(" (for scalar modes, corresponds to nu=%e)",sqrt(ppt->k[index_md][index_k]*ppt->k[index_md][index_k]+pba->K)/sqrt(pba->sgnK*pba->K));
             printf("\n");
-          }
-
+      }
           struct perturbations_workspace pw;
+
+
           class_call(perturbations_workspace_init(ppr,
                                                   pba,
                                                   pth,
@@ -930,7 +941,7 @@ int perturbations_init(
                                                   &pw),
                      ppt->error_message,
                      ppt->error_message);
-
+// printf("I am here----------------------------\n");
           class_call(perturbations_solve(ppr,
                                          pba,
                                          pth,
@@ -941,22 +952,24 @@ int perturbations_init(
                                          &pw),
                      ppt->error_message,
                      ppt->error_message);
-
+// printf("I am here----------------------------as well\n");
+        
           class_call(perturbations_workspace_free(ppt,index_md,&pw),
                      ppt->error_message,
                      ppt->error_message);
           return _SUCCESS_;
 
         );
-
       } /* end of loop over wavenumbers */
 
     } /* end of loop over initial conditions */
 
-  } /* end loop over modes */
 
   class_finish_parallel();
 
+// if ( (pba->has_ncdm == _TRUE_) && (pba->has_nuself_massive == _TRUE_)) free_collision_int_coeff_massive(ppt);//SG
+
+if (pba->has_ncdm == _TRUE_) free_collision_int_coeff_massive(ppt);//SG
 
   /** - spline the source array with respect to the time variable */
 
@@ -992,8 +1005,10 @@ int perturbations_init(
     class_finish_parallel();
   }
 
-  return _SUCCESS_;
 }
+ return _SUCCESS_;
+}
+
 
 /**
  * Free all memory space allocated by input.
@@ -8687,6 +8702,7 @@ int perturbations_derivs(double tau,
   int index_q,n_ncdm,idx;
   double q,epsilon,dlnf0_dlnq,qk_div_epsilon;
   double rho_ncdm_bg,p_ncdm_bg,pseudo_p_ncdm,w_ncdm,ca2_ncdm,ceff2_ncdm=0.,cvis2_ncdm=0.;
+  double tau_dot_nu = 0;
 
   /* for use with curvature */
   double cotKgen, sqrt_absK;
@@ -8694,6 +8710,10 @@ int perturbations_derivs(double tau,
 
   /* for use with dcdm and dr */
   double f_dr, fprime_dr;
+
+  //SG: for NCDM
+  int ncdm_is_tca = 0;
+  int ncdm_tca_safeguard = 0;//This is to make sure it does not go back in time sampling.
 
   /** - rename the fields of the input structure (just to avoid heavy notations) */
 
@@ -8754,6 +8774,9 @@ int perturbations_derivs(double tau,
   a2 = a*a;
   a_prime_over_a = pvecback[pba->index_bg_H] * a;
   R = 4./3. * pvecback[pba->index_bg_rho_g]/pvecback[pba->index_bg_rho_b];
+
+
+
 
   photon_scattering_rate = pvecthermo[pth->index_th_dkappa];
 
@@ -9452,7 +9475,7 @@ int perturbations_derivs(double tau,
           if (ppr->ncdm_fluid_approximation == ncdmfa_mb) {
 
             dy[idx+2] = -3.0*(a_prime_over_a*(2./3.-ca2_ncdm-pseudo_p_ncdm/p_ncdm_bg/3.)+1./tau)*y[idx+2]
-              +8.0/3.0*cvis2_ncdm/(1.0+w_ncdm)*s_l[2]*(y[idx+1]+metric_shear);
+             +8.0/3.0*cvis2_ncdm/(1.0+w_ncdm)*s_l[2]*(y[idx+1]+metric_shear);
 
           }
 
@@ -9470,9 +9493,15 @@ int perturbations_derivs(double tau,
 
           }
 
+                            if ((abs(k-6.549248)<0.1) ){ //
+
+        printf("(%e) [%e], %d<->%d, | %e | %e | %e | %e\n",k,tau,ncdm_is_tca,ppw->approx[ppw->index_ap_ncdmfa],y[idx],y[idx+1],y[idx+2],y[idx+3]);
+                                          }
+
           /** - -----> jump to next species */
 
           idx += pv->l_max_ncdm[n_ncdm]+1;
+
         }
       }
 
@@ -9484,9 +9513,25 @@ int perturbations_derivs(double tau,
 
         for (n_ncdm=0; n_ncdm<pv->N_ncdm; n_ncdm++) {
 
+          if ( pba->has_nuself_massive == _TRUE_) { //SG
+
+        tau_dot_nu = a*pow(pba->Geff/_MeV_to_K/_MeV_to_K,2)*pow(pba->T_ncdm[n_ncdm]*pba->T_cmb/a,5)*_K_to_Mpc_inv_;
+          }
+        
+        if (tau_dot_nu/a_prime_over_a > 1.0e3) {
+            
+            ncdm_is_tca = 1; 
+
+        }
+        else {
+                
+            ncdm_is_tca = 0;
+
+            }
           /** - -----> loop over momentum */
 
           for (index_q=0; index_q < pv->q_size_ncdm[n_ncdm]; index_q++) {
+
 
             /** - -----> define intermediate quantities */
 
@@ -9495,6 +9540,9 @@ int perturbations_derivs(double tau,
             epsilon = sqrt(q*q+a2*pba->M_ncdm[n_ncdm]*pba->M_ncdm[n_ncdm]);
             qk_div_epsilon = k*q/epsilon;
 
+            if ( pba->has_nuself_massive == _TRUE_)  get_collision_int_coeff_massive(ppt,q,ppt->coeff_interp) ; //SG
+            
+            // printf("%e\t%e\n",q,ppt->coeff_interp[0]);
             /** - -----> ncdm density for given momentum bin */
 
             dy[idx] = -qk_div_epsilon*y[idx+1]+metric_continuity*dlnf0_dlnq/3.;
@@ -9504,28 +9552,83 @@ int perturbations_derivs(double tau,
             dy[idx+1] = qk_div_epsilon/3.0*(y[idx] - 2*s_l[2]*y[idx+2])
               -epsilon*metric_euler/(3*q*k)*dlnf0_dlnq;
 
-            /** - -----> ncdm shear for given momentum bin */
+                          /** - -----> ncdm shear for given momentum bin */
+
+            // dy[idx+2] = qk_div_epsilon/5.0*(2*s_l[2]*y[idx+1]-3.*s_l[3]*y[idx+3])
+            //   -s_l[2]*metric_shear*2./15.*dlnf0_dlnq - tau_dot_nu*ppt->coeff_interp[2]*y[idx+2];
+
+            if (ncdm_is_tca == 0) { //SG
+
+             //ncdm_tca_safeguard = 1;
+
+            // if (abs(q-7.085810e+00)<0.1) {   
+            // printf("q = %e\n", q);
+            // printf("l = 0 -> %e\n", ppt->coeff_interp[0]);
+            // printf("l = 1 -> %e\n", ppt->coeff_interp[1]);
+            // printf("l = 2 -> %e\n", ppt->coeff_interp[2]);
+            // }
+            
+
+            // /** - -----> ncdm shear for given momentum bin */
 
             dy[idx+2] = qk_div_epsilon/5.0*(2*s_l[2]*y[idx+1]-3.*s_l[3]*y[idx+3])
-              -s_l[2]*metric_shear*2./15.*dlnf0_dlnq;
+              -s_l[2]*metric_shear*2./15.*dlnf0_dlnq - tau_dot_nu*ppt->coeff_interp[2]*y[idx+2];
 
             /** - -----> ncdm l>3 for given momentum bin */
 
             for (l=3; l<pv->l_max_ncdm[n_ncdm]; l++){
-              dy[idx+l] = qk_div_epsilon/(2.*l+1.0)*(l*s_l[l]*y[idx+(l-1)]-(l+1.)*s_l[l+1]*y[idx+(l+1)]);
+              dy[idx+l] = qk_div_epsilon/(2.*l+1.0)*(l*s_l[l]*y[idx+(l-1)]-(l+1.)*s_l[l+1]*y[idx+(l+1)]) - tau_dot_nu*ppt->coeff_interp[l]*y[idx+l];
+                            // if (abs(q-7.085810e+00)<0.1) { 
+            // printf("l = %d -> %e\n", l, ppt->coeff_interp[l]);
+                            // }
             }
 
             /** - -----> ncdm lmax for given momentum bin (truncation as in Ma and Bertschinger)
                 but with curvature taken into account a la arXiv:1305.3261 */
 
-            dy[idx+l] = qk_div_epsilon*y[idx+l-1]-(1.+l)*k*cotKgen*y[idx+l];
+            dy[idx+l] = qk_div_epsilon*y[idx+l-1]-(1.+l)*k*cotKgen*y[idx+l] - tau_dot_nu*ppt->coeff_interp[l]*y[idx+l];
 
             /** - -----> jump to next momentum bin or species */
 
+            }
+
+            if (ncdm_is_tca == 1) {
+
+
+            /** - -----> ncdm shear for given momentum bin */
+
+            dy[idx+2] = 0; //qk_div_epsilon/5.0*(2*s_l[2]*y[idx+1]-3.*s_l[3]*y[idx+3])
+              //-s_l[2]*metric_shear*2./15.*dlnf0_dlnq - tau_dot_nu*ppt->coeff_interp[2]*y[idx+2];
+
+            /** - -----> ncdm l>3 for given momentum bin */
+
+            for (l=3; l<pv->l_max_ncdm[n_ncdm]; l++){
+              //dy[idx+l] = 0; //qk_div_epsilon/(2.*l+1.0)*(l*s_l[l]*y[idx+(l-1)]-(l+1.)*s_l[l+1]*y[idx+(l+1)]) - tau_dot_nu*ppt->coeff_interp[l]*y[idx+l];
+            }
+
+            /** - -----> ncdm lmax for given momentum bin (truncation as in Ma and Bertschinger)
+                but with curvature taken into account a la arXiv:1305.3261 */
+
+            dy[idx+l] = 0;//qk_div_epsilon*y[idx+l-1]-(1.+l)*k*cotKgen*y[idx+l] - tau_dot_nu*ppt->coeff_interp[l]*y[idx+l];
+
+            /** - -----> jump to next momentum bin or species */
+
+            }
+
+                                            if ((abs(k-6.549248)<0.1) && (abs(q - 7.0)<1.0) ){ //
+
+                // printf("(%e) [%e] , %d<->%d, | %e | %e | %e | %e | %e | %e | %e || {%e} || [%e] \n",k,tau,ncdm_is_tca,ppw->approx[ppw->index_ap_ncdmfa], y[idx],y[idx+1],y[idx+2],y[idx+3],y[idx+pv->l_max_ncdm[n_ncdm]-3],y[idx+pv->l_max_ncdm[n_ncdm]-2],y[idx+pv->l_max_ncdm[n_ncdm]-1],q,tau_dot_nu/a_prime_over_a);
+            printf("(%e) [%e] , %d<->%d, | %e | %e | %e | %e | %e | %e | %e || {%e} || [%e] \n",k,tau,ncdm_is_tca,ppw->approx[ppw->index_ap_ncdmfa], y[idx],y[idx+1],y[idx+2],y[idx+3],y[idx + 4],y[idx+5],y[idx+6],q,tau_dot_nu/a_prime_over_a);
+                                            }
+
             idx += (pv->l_max_ncdm[n_ncdm]+1);
-          }
+
+
+              
+          
         }
       }
+    }
     }
 
     /** - ---> metric */
@@ -10430,3 +10533,243 @@ int perturbations_rsa_idr_delta_and_theta(
   return _SUCCESS_;
 
 }
+// SG
+// collision term interpolation file reading -- Massive Neutrino self interaction
+
+ //   int read_and_store_collision_int_coeff_massive(
+ //                                            struct precision * ppr,
+ //                                            struct perturbations * ppt){
+
+ //    FILE * fA;
+ //    char line[_LINE_LENGTH_MAX_];
+ //    char * left;
+
+ //    int num_x1=0;
+ //    int num_l=0;
+
+ //    double * x1=NULL;
+ //    double * coeff=NULL;
+
+ //    int array_line=0;
+ //    int index_x1;
+
+ //    class_open(fA,ppr->coll_massive_file, "r",ppt->error_message);
+
+ // /* go through each line */
+ //  while (fgets(line,_LINE_LENGTH_MAX_-1,fA) != NULL) {
+
+ //    /* eliminate blank spaces at beginning of line */
+ //    left=line;
+ //    while (left[0]==' ') {
+ //      left++;
+ //    }
+
+ //    /* check that the line is neither blank neither a comment. In ASCII, left[0]>39 means that first non-blank character might
+ //       be the beginning of some data (it is not a newline, a #, a %, etc.) */
+ //    if (left[0] > 39) {
+
+ //      /* if the line contains data, we must interpret it. If (num_lines)=(0), the current line must contain
+ //         the values. Otherwise, it must contain (mbyT, integral_value). */
+ //      if ((num_x1==0) && (num_l==0)) {
+
+ //        /* read (mbyT), infer size of arrays and allocate them */
+ //        class_test(sscanf(line,"%d %d",&num_x1,&num_l) != 2,
+ //                   ppt->error_message,
+ //                   "could not read value of parameters (num_x1, num_l) in file %s\n",ppr->coll_massive_file);
+
+ //        // class_alloc(x1,num_x1*sizeof(double),ppt->error_message);
+ //        // class_alloc(coeff,num_x1*num_l*sizeof(double),ppt->error_message);
+ //      ppt->x1_size = num_x1;
+ //      ppt->l_size = num_l;
+ //      class_alloc(ppt->x1,ppt->x1_size*sizeof(double),ppt->error_message);
+ //      class_alloc(ppt->lv,ppt->l_size*sizeof(double),ppt->error_message);
+ //      class_alloc(ppt->coeff,ppt->x1_size*ppt->l_size*sizeof(double),ppt->error_message);
+ //      class_alloc(ppt->ddcoeff,ppt->x1_size*ppt->l_size*sizeof(double),ppt->error_message);
+
+ //        array_line=0;
+
+ //      }
+ //      else{
+ //        class_test(sscanf(line,"%lg %lg %lg",&ppt->x1[array_line%num_x1],&ppt->lv[array_line/num_x1],
+ //                          &ppt->coeff[array_line]) != 3,
+ //                   ppt->error_message,
+ //                   "could not read values of parameters (x1,l,coeff) in file %s\n",ppr->coll_massive_file);
+ //                // printf("%d,%d,%d,%f\n",array_line%num_x1, array_line/num_x1,array_line,ppt->coeff[array_line]);
+
+ //                          array_line ++;
+ //      }
+ //    }
+ //  }
+ //        fclose(fA);
+ //  // Store data to access for interpolation later
+ //      // ppt->x1_size = num_x1;
+ //      // class_alloc(ppt->x1,ppt->x1_size*sizeof(double),ppt->error_message);
+ //      // class_alloc(ppt->coeff,ppt->x1_size*sizeof(double),ppt->error_message);
+ //      // class_alloc(ppt->ddcoeff,ppt->x1_size*sizeof(double),ppt->error_message);
+ //      // for (index_x1=0; index_x1<ppt->x1_size; index_x1++) {
+ //      //       pba->logmbyT[index_mbyT] = log(mbyT[index_mbyT]); //Moving to log scale for better interpolation
+ //      //       pba->intg[index_mbyT] = intg[index_mbyT];
+
+ //      // }
+ //    class_call(array_spline_table_lines(ppt->x1,
+ //                                        ppt->x1_size,
+ //                                        ppt->coeff,
+ //                                        ppt->l_size,
+ //                                        ppt->ddcoeff,
+ //                                        _SPLINE_NATURAL_,
+ //                                        ppt->error_message),
+ //               ppt->error_message,
+ //               ppt->error_message);
+ //    // free(mbyT);
+ //    // free(intg);
+
+    
+ //       return _SUCCESS_;
+ //   };
+
+
+   int read_and_store_collision_int_coeff_massive(
+                                            struct precision * ppr,
+                                            struct perturbations * ppt){
+
+    FILE * fA;
+    char line[_LINE_LENGTH_MAX_];
+    char * left;
+
+    int num_x1=0;
+    int num_l=0;
+
+    double * x1=NULL;
+    double * coeff=NULL;
+
+    int array_line=0;
+    int index_x1;
+
+    class_open(fA,ppr->coll_massive_file, "r",ppt->error_message);
+
+ /* go through each line */
+  while (fgets(line,_LINE_LENGTH_MAX_-1,fA) != NULL) {
+
+    /* eliminate blank spaces at beginning of line */
+    left=line;
+    while (left[0]==' ') {
+      left++;
+    }
+
+    /* check that the line is neither blank neither a comment. In ASCII, left[0]>39 means that first non-blank character might
+       be the beginning of some data (it is not a newline, a #, a %, etc.) */
+    if (left[0] > 39) {
+
+      /* if the line contains data, we must interpret it. If (num_lines)=(0), the current line must contain
+         the values. Otherwise, it must contain (mbyT, integral_value). */
+      if ((num_l==0) && (num_x1==0)) {
+
+        /* read (mbyT), infer size of arrays and allocate them */
+        class_test(sscanf(line,"%d %d",&num_l,&num_x1) != 2,
+                   ppt->error_message,
+                   "could not read value of parameters ( num_lm num_x1) in file %s\n",ppr->coll_massive_file);
+
+        // class_alloc(x1,num_x1*sizeof(double),ppt->error_message);
+        // class_alloc(coeff,num_x1*num_l*sizeof(double),ppt->error_message);
+      ppt->x1_size = num_x1;
+      ppt->l_size = num_l;
+      class_alloc(ppt->x1,ppt->x1_size*sizeof(double),ppt->error_message);
+      class_alloc(ppt->lv,ppt->l_size*sizeof(double),ppt->error_message);
+      class_alloc(ppt->coeff,ppt->x1_size*ppt->l_size*sizeof(double),ppt->error_message);
+      class_alloc(ppt->ddcoeff,ppt->x1_size*ppt->l_size*sizeof(double),ppt->error_message);
+
+        array_line=0;
+
+      }
+      else{
+        class_test(sscanf(line,"%lg %lg %lg",&ppt->lv[array_line%num_l],&ppt->x1[array_line/num_l],
+                          &ppt->coeff[array_line]) != 3,
+                   ppt->error_message,
+                   "could not read values of parameters (l,x1,coeff) in file %s\n",ppr->coll_massive_file);
+                // printf("%d,%d,%d,%f\n",array_line%num_x1, array_line/num_x1,array_line,ppt->coeff[array_line]);
+
+                          array_line ++;
+      }
+    }
+  }
+        fclose(fA);
+  // Store data to access for interpolation later
+      // ppt->x1_size = num_x1;
+      // class_alloc(ppt->x1,ppt->x1_size*sizeof(double),ppt->error_message);
+      // class_alloc(ppt->coeff,ppt->x1_size*sizeof(double),ppt->error_message);
+      // class_alloc(ppt->ddcoeff,ppt->x1_size*sizeof(double),ppt->error_message);
+      // for (index_x1=0; index_x1<ppt->x1_size; index_x1++) {
+      //       pba->logmbyT[index_mbyT] = log(mbyT[index_mbyT]); //Moving to log scale for better interpolation
+      //       pba->intg[index_mbyT] = intg[index_mbyT];
+
+      // }
+    class_call(array_spline_table_lines(ppt->x1,
+                                        ppt->x1_size,
+                                        ppt->coeff,
+                                        ppt->l_size,
+                                        ppt->ddcoeff,
+                                        _SPLINE_NATURAL_,
+                                        ppt->error_message),
+               ppt->error_message,
+               ppt->error_message);
+    // free(mbyT);
+    // free(intg);
+
+    
+       return _SUCCESS_;
+   };
+
+  int get_collision_int_coeff_massive(
+                                            struct perturbations * ppt,
+                                            double x1_eval,
+                                            double * coeff_interp
+
+  ){
+
+    int last_index;
+
+    // class_alloc(ppt->coeff_interp,ppt->l_size*sizeof(double),ppt->error_message);
+
+    class_test(x1_eval < ppt->x1[0],
+          ppt->error_message,
+          "The p/T_nu = %e value asked is too small compared to the lowest value %e in the table. Possibly need to recompute table.",
+          x1_eval,ppt->x1[0]);
+
+    class_test(x1_eval > ppt->x1[ppt->x1_size-1],
+          ppt->error_message,
+          "The p/T_nu = %e value asked is too large compared to the highest value %e in the table. Possibly need to recompute table.",
+          x1_eval,ppt->x1[ppt->x1_size-1]);
+
+   class_call(array_interpolate_spline(
+                                    ppt->x1,
+                                    ppt->x1_size,
+                                    ppt->coeff,
+                                    ppt->ddcoeff,
+                                    ppt->l_size,
+                                    x1_eval,
+                                    &last_index,
+                                    ppt->coeff_interp,
+                                    ppt->l_size,
+                                    ppt->error_message),
+           ppt->error_message,
+           ppt->error_message);
+
+    
+
+    return _SUCCESS_;
+      
+  }
+
+
+
+int free_collision_int_coeff_massive(struct perturbations * ppt)
+{
+
+    free(ppt->x1);
+    free(ppt->lv);
+    free(ppt->coeff);
+    free(ppt->ddcoeff);
+    free(ppt->coeff_interp);    
+    return _SUCCESS_;
+}
+

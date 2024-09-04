@@ -215,6 +215,7 @@ struct thermodynamics
   int index_th_ddcb2;         /**< second derivative wrt conformal time of squared baryon sound speed  \f$ d^2 [c_b^2] / d \tau^2 \f$ (only computed if some non0-minimal tight-coupling schemes is requested) */
   int index_th_rate;          /**< maximum variation rate of \f$ exp^{-\kappa}\f$, g and \f$ (d g / d \tau) \f$, used for computing integration step in perturbation module */
   int index_th_r_d;           /**< simple analytic approximation to the photon comoving damping scale */
+  int index_th_dmu_nuself_massive;       /**< neutrino self-interaction rate for ncdm*/
 
   int th_size;                /**< size of thermodynamics vector */
 
@@ -721,6 +722,11 @@ extern "C" {
 #define _Sun_mass_ 1.98855e30 /**< sun mass in kg */
 #define _eV_over_Kelvin_ 8.61733034e-5   /**< kB in eV/K */
 #define _eV_over_joules_ 6.24150647996e+18 /**< eV/J */
+
+// Conversion factors :SG
+
+#define _K_to_Mpc_inv_ 1.34588e25 /**< K to Mpc^-1 conversion  */
+#define _MeV_to_K   1.16e10 /**< MeV to K conversion  */
 
 
 //@}

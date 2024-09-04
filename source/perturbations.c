@@ -711,6 +711,8 @@ int perturbations_init(
   /* background quantities */
   double w_fld_ini, w_fld_0,dw_over_da_fld,integral_fld;
 
+  // int debug_flag;// SG
+
   /** - perform preliminary checks */
 
   if (ppt->has_perturbations == _FALSE_) {
@@ -921,7 +923,7 @@ int perturbations_init(
       /* integrating backwards is slightly more optimal for parallel runs */
       //for (index_k = 0; index_k < ppt->k_size; index_k++) {
       for (index_k = ppt->k_size[index_md]-1; index_k >=0; index_k--) {
-
+// debug_flag = 0;
         class_run_parallel(with_arguments(ppr,pba,pth,ppt,index_md,index_ic,index_k),
 
           if (ppt->perturbations_verbose > 2) {
@@ -941,7 +943,8 @@ int perturbations_init(
                                                   &pw),
                      ppt->error_message,
                      ppt->error_message);
-// printf("I am here----------------------------\n");
+// printf("I am here------------(k = %e)----------------starting\n",ppt->k[index_md][index_k]);
+
           class_call(perturbations_solve(ppr,
                                          pba,
                                          pth,
@@ -952,7 +955,8 @@ int perturbations_init(
                                          &pw),
                      ppt->error_message,
                      ppt->error_message);
-// printf("I am here----------------------------as well\n");
+
+// printf("I am here-------------(k = %e)----------------------done\n",ppt->k[index_md][index_k]);
         
           class_call(perturbations_workspace_free(ppt,index_md,&pw),
                      ppt->error_message,
@@ -960,6 +964,8 @@ int perturbations_init(
           return _SUCCESS_;
 
         );
+// debug_flag = 1;
+//         if (debug_flag == 1) printf("No Problem with this k = %e--------------------------\n",ppt->k[index_md][index_k]);
       } /* end of loop over wavenumbers */
 
     } /* end of loop over initial conditions */
@@ -2787,6 +2793,7 @@ int perturbations_workspace_init(
   if (_scalars_) {
 
     class_define_index(ppw->index_ap_ufa,pba->has_ur,index_ap,1);
+    class_define_index(ppw->index_ap_nuself_tca,pba->has_ncdm,index_ap,1);
     class_define_index(ppw->index_ap_ncdmfa,pba->has_ncdm,index_ap,1);
     class_define_index(ppw->index_ap_tca_idm_dr,pba->has_idr,index_ap,1);
     class_define_index(ppw->index_ap_rsa_idr,pba->has_idr,index_ap,1);
@@ -2818,6 +2825,13 @@ int perturbations_workspace_init(
     }
     if (pba->has_ncdm == _TRUE_) {
       ppw->approx[ppw->index_ap_ncdmfa]=(int)ncdmfa_off;
+        if (pba->has_nuself_massive == _TRUE_) {
+            ppw->approx[ppw->index_ap_nuself_tca] = (int)nuself_tca_on;//SG
+        }
+        else {
+            ppw->approx[ppw->index_ap_nuself_tca] = (int)nuself_tca_off;//SG
+        }
+      
     }
   }
 
@@ -3488,6 +3502,7 @@ int perturbations_find_approximation_number(
                ppt->error_message);
 
     flag_end = ppw->approx[index_ap];
+//printf("flag_ini = %d (tau_ini = %e), flag_end = %d(tau_end = %e)\n", flag_ini,tau_ini,flag_end,tau_end); //SG
 
     class_test(flag_end<flag_ini,
                ppt->error_message,
@@ -3684,7 +3699,6 @@ int perturbations_find_approximation_switches(
 
       for (index_ap=0; index_ap<ppw->ap_size; index_ap++) {
         interval_approx[index_switch][index_ap]=ppw->approx[index_ap];
-
         /* check here that approximation does not go backward (remember
            that by definition the value of an approximation can only
            increase) */
@@ -3698,6 +3712,7 @@ int perturbations_find_approximation_switches(
                    0.5*(interval_limit[index_switch-1]+interval_limit[index_switch]),
                    0.5*(interval_limit[index_switch]+interval_limit[index_switch+1])
                    );
+                          // printf("I am here\n");
       }
 
       /* check here that more than one approximation is not switched on at a given time */
@@ -3745,10 +3760,21 @@ int perturbations_find_approximation_switches(
             }
           }
           if (pba->has_ncdm == _TRUE_) {
+                          // printf("interval_approx[index_switch-1][ppw->index_ap_nuself_tca] = %d\n", interval_approx[index_switch-1][ppw->index_ap_nuself_tca]);
+
+            // if (pba->has_nuself_massive == _TRUE_) {
+
+            if ((interval_approx[index_switch-1][ppw->index_ap_nuself_tca]==(int)nuself_tca_on) &&
+                (interval_approx[index_switch][ppw->index_ap_nuself_tca]==(int)nuself_tca_off)) {
+              fprintf(stdout,"Mode k=%e: will switch off ncdm nuself tca approximation at tau=%e\n",k,interval_limit[index_switch]);
+            }
+            // }
+              
             if ((interval_approx[index_switch-1][ppw->index_ap_ncdmfa]==(int)ncdmfa_off) &&
                 (interval_approx[index_switch][ppw->index_ap_ncdmfa]==(int)ncdmfa_on)) {
               fprintf(stdout,"Mode k=%e: will switch on ncdm fluid approximation at tau=%e\n",k,interval_limit[index_switch]);
             }
+              // printf("I am here--\n");
           }
         }
 
@@ -3846,6 +3872,7 @@ int perturbations_vector_init(
   struct perturbations_vector * ppv;
 
   int index_pt;
+  int index_pt_old;
   int l;
   int n_ncdm,index_q,ncdm_l_size;
   double rho_plus_p_ncdm,q,q2,epsilon,a,factor;
@@ -4010,13 +4037,20 @@ int perturbations_vector_init(
       for (n_ncdm = 0; n_ncdm < pba->N_ncdm; n_ncdm++){
         // Set value of ppv->l_max_ncdm:
         if (ppw->approx[ppw->index_ap_ncdmfa] == (int)ncdmfa_off){
-          /* reject inconsistent values of the number of mutipoles in ultra relativistic neutrino hierarchy */
+          //Copy value from precision parameter:
+            if (ppw->approx[ppw->index_ap_nuself_tca] == (int)nuself_tca_off){
+        /* reject inconsistent values of the number of mutipoles in ultra relativistic neutrino hierarchy */
           class_test(ppr->l_max_ncdm < 4,
                      ppt->error_message,
                      "ppr->l_max_ncdm=%d should be at least 4, i.e. we must integrate at least over first four momenta of non-cold dark matter perturbed phase-space distribution",n_ncdm);
-          //Copy value from precision parameter:
           ppv->l_max_ncdm[n_ncdm] = ppr->l_max_ncdm;
           ppv->q_size_ncdm[n_ncdm] = pba->q_size_ncdm[n_ncdm];
+            }
+            //SG - Setting l size to be only 2 for tight coupling approximation
+          if  (ppw->approx[ppw->index_ap_nuself_tca] == (int)nuself_tca_on){
+                ppv->l_max_ncdm[n_ncdm] = 1; //SG - higher moments are all zero
+                ppv->q_size_ncdm[n_ncdm] = pba->q_size_ncdm[n_ncdm];
+            }
         }
         else{
           // In the fluid approximation, hierarchy is cut at lmax = 2 and q dependence is integrated out:
@@ -4300,7 +4334,7 @@ int perturbations_vector_init(
 
         class_test(ppw->approx[ppw->index_ap_ncdmfa] == (int)ncdmfa_on,
                    ppt->error_message,
-                   "scalar initial conditions assume ncdm fluid approximation turned off");
+                   "scalar initial conditions assume ncdm fluid approximation turned off"); //SG
 
       }
 
@@ -4340,7 +4374,13 @@ int perturbations_vector_init(
                ppt->error_message,
                ppt->error_message);
 
+            //SG 
+//printf("%e--------\n",ppw->pv->y[ppw->pv->index_pt_psi0_ncdm1]);
+//printf("%d--------\n",ppv->l_max_ncdm[0]);
+//printf("%d--------\n",ppv->q_size_ncdm[0]);
+      
   }
+
 
   /** - case of switching approximation while a wavenumber is being integrated */
 
@@ -4364,6 +4404,8 @@ int perturbations_vector_init(
                    ppt->error_message,
                    "at tau=%g: the dark tight-coupling approximation can be switched off, not on",tau);
       }
+
+        //SG - add stuff here
 
       /** - ---> (a.2.) some variables (b, cdm, fld, ...) are not affected by
           any approximation. They need to be reconducted whatever
@@ -5069,6 +5111,139 @@ int perturbations_vector_init(
           }
         }
       }
+
+        //ppw->approx[ppw->index_ap_nuself_tca] = (int)nuself_tca_on;
+
+    //SG - Case for switching to nuself - tca
+      if (pba->has_ncdm == _TRUE_) {
+
+        if ((pa_old[ppw->index_ap_nuself_tca] == (int)nuself_tca_on) && (ppw->approx[ppw->index_ap_nuself_tca] == (int)nuself_tca_off)) {
+
+          if (ppt->perturbations_verbose>2)
+            fprintf(stdout,"Mode k=%e: switch off ncdm nuself tca approximation at tau=%e\n",k,tau);
+
+          if (ppw->approx[ppw->index_ap_rsa] == (int)rsa_off) {
+
+            ppv->y[ppv->index_pt_delta_g] =
+              ppw->pv->y[ppw->pv->index_pt_delta_g];
+
+            ppv->y[ppv->index_pt_theta_g] =
+              ppw->pv->y[ppw->pv->index_pt_theta_g];
+          }
+
+          if ((ppw->approx[ppw->index_ap_tca] == (int)tca_off) && (ppw->approx[ppw->index_ap_rsa] == (int)rsa_off)) {
+
+            ppv->y[ppv->index_pt_shear_g] =
+              ppw->pv->y[ppw->pv->index_pt_shear_g];
+
+            ppv->y[ppv->index_pt_l3_g] =
+              ppw->pv->y[ppw->pv->index_pt_l3_g];
+
+            for (l = 4; l <= ppw->pv->l_max_g; l++) {
+
+              ppv->y[ppv->index_pt_delta_g+l] =
+                ppw->pv->y[ppw->pv->index_pt_delta_g+l];
+            }
+
+            ppv->y[ppv->index_pt_pol0_g] =
+              ppw->pv->y[ppw->pv->index_pt_pol0_g];
+
+            ppv->y[ppv->index_pt_pol1_g] =
+              ppw->pv->y[ppw->pv->index_pt_pol1_g];
+
+            ppv->y[ppv->index_pt_pol2_g] =
+              ppw->pv->y[ppw->pv->index_pt_pol2_g];
+
+            ppv->y[ppv->index_pt_pol3_g] =
+              ppw->pv->y[ppw->pv->index_pt_pol3_g];
+
+            for (l = 4; l <= ppw->pv->l_max_pol_g; l++) {
+
+              ppv->y[ppv->index_pt_pol0_g+l] =
+                ppw->pv->y[ppw->pv->index_pt_pol0_g+l];
+            }
+
+          }
+
+          if (pba->has_ur == _TRUE_) {
+
+            if (ppw->approx[ppw->index_ap_rsa] == (int)rsa_off) {
+
+
+              ppv->y[ppv->index_pt_delta_ur] =
+                ppw->pv->y[ppw->pv->index_pt_delta_ur];
+
+              ppv->y[ppv->index_pt_theta_ur] =
+                ppw->pv->y[ppw->pv->index_pt_theta_ur];
+
+              ppv->y[ppv->index_pt_shear_ur] =
+                ppw->pv->y[ppw->pv->index_pt_shear_ur];
+
+              if (ppw->approx[ppw->index_ap_ufa] == (int)ufa_off) {
+
+                ppv->y[ppv->index_pt_l3_ur] =
+                  ppw->pv->y[ppw->pv->index_pt_l3_ur];
+
+                for (l=4; l <= ppv->l_max_ur; l++)
+                  ppv->y[ppv->index_pt_delta_ur+l] =
+                    ppw->pv->y[ppw->pv->index_pt_delta_ur+l];
+
+              }
+            }
+          }
+
+          if (pba->has_idr == _TRUE_){
+            if (ppw->approx[ppw->index_ap_rsa_idr] == (int)rsa_idr_off){
+
+              ppv->y[ppv->index_pt_delta_idr] =
+                ppw->pv->y[ppw->pv->index_pt_delta_idr];
+
+              ppv->y[ppv->index_pt_theta_idr] =
+                ppw->pv->y[ppw->pv->index_pt_theta_idr];
+
+              if (ppt->idr_nature == idr_free_streaming){
+
+                if (ppw->approx[ppw->index_ap_tca_idm_dr] == (int)tca_idm_dr_off){
+
+                  ppv->y[ppv->index_pt_shear_idr] =
+                    ppw->pv->y[ppw->pv->index_pt_shear_idr];
+
+                  ppv->y[ppv->index_pt_l3_idr] =
+                    ppw->pv->y[ppw->pv->index_pt_l3_idr];
+
+                  for (l=4; l <= ppv->l_max_idr; l++)
+                    ppv->y[ppv->index_pt_delta_idr+l] =
+                      ppw->pv->y[ppw->pv->index_pt_delta_idr+l];
+                }
+              }
+            }
+          }
+
+
+            index_pt = 0;
+            index_pt_old = 0;
+            for (n_ncdm = 0; n_ncdm < ppv->N_ncdm; n_ncdm++){
+              for (index_q=0; index_q < ppv->q_size_ncdm[n_ncdm]; index_q++){
+                for (l=0; l<=ppv->l_max_ncdm[n_ncdm]; l++){
+                  /* This is correct even when ncdmfa == off, since ppv->l_max_ncdm and
+                     ppv->q_size_ncdm is updated. */
+                    //SG
+                    if  ((l==0) || (l==1)) {
+                  ppv->y[ppv->index_pt_psi0_ncdm1+index_pt] =
+                    ppw->pv->y[ppw->pv->index_pt_psi0_ncdm1+index_pt_old];
+                        index_pt_old++;
+                    }
+                    else {
+                      ppv->y[ppv->index_pt_psi0_ncdm1+index_pt] = 0;  
+                    }
+                  index_pt++;
+                }
+              }
+            }
+
+        }
+      }
+        
     }
 
     /** - --> (b) for the vector mode */
@@ -5365,7 +5540,7 @@ int perturbations_initial_conditions(struct precision * ppr,
     if (pba->has_ncdm == _TRUE_) {
       for (n_ncdm=0; n_ncdm<pba->N_ncdm; n_ncdm++){
         rho_r += ppw->pvecback[pba->index_bg_rho_ncdm1 + n_ncdm];
-        rho_nu += ppw->pvecback[pba->index_bg_rho_ncdm1 + n_ncdm];
+        if ( pba->has_nuself_massive == _FALSE_ ) rho_nu += ppw->pvecback[pba->index_bg_rho_ncdm1 + n_ncdm];
       }
     }
 
@@ -5815,6 +5990,7 @@ int perturbations_initial_conditions(struct precision * ppr,
       for (n_ncdm=0; n_ncdm < pba->N_ncdm; n_ncdm++){
 
         for (index_q=0; index_q < ppw->pv->q_size_ncdm[n_ncdm]; index_q++) {
+            //SG
 
           q = pba->q_ncdm[n_ncdm][index_q];
 
@@ -5824,9 +6000,17 @@ int perturbations_initial_conditions(struct precision * ppr,
 
           ppw->pv->y[idx+1] =  -epsilon/3./q/k*theta_ur* pba->dlnf0_dlnq_ncdm[n_ncdm][index_q];
 
+          if ( pba->has_nuself_massive == _FALSE_ ) {
+
           ppw->pv->y[idx+2] = -0.5 * shear_ur * pba->dlnf0_dlnq_ncdm[n_ncdm][index_q];
 
           ppw->pv->y[idx+3] = -0.25 * l3_ur * pba->dlnf0_dlnq_ncdm[n_ncdm][index_q];
+
+          }
+
+        // printf("%e -> %e--------\n",q,ppw->pv->y[idx]);
+
+            //SG -fix
 
           //Jump to next momentum bin:
           idx += (ppw->pv->l_max_ncdm[n_ncdm]+1);
@@ -6084,7 +6268,7 @@ int perturbations_approximations(
                                    ppw->pvecthermo),
                pth->error_message,
                ppt->error_message);
-
+// printf("%e\n",ppw->pvecthermo[pth->index_th_dmu_nuself_massive]);
     /* in case of idm_g, calculate relevant quantities */
     if (pth->has_idm_g == _TRUE_) {
       class_test(ppw->pvecthermo[pth->index_th_dmu_idm_g] == 0.,
@@ -6212,17 +6396,47 @@ int perturbations_approximations(
       }
     }
 
-    if (pba->has_ncdm == _TRUE_) {
+    if (pba->has_ncdm == _TRUE_) { //SG
 
-      if ((tau/tau_k > ppr->ncdm_fluid_trigger_tau_over_tau_k) &&
-          (ppr->ncdm_fluid_approximation != ncdmfa_none)) {
+        if (pba->has_nuself_massive == _TRUE_){
+
+          if ((ppw->pvecback[pba->index_bg_dmu_nuself_massive]*tau_h > ppr->ncdm_nuself_trigger_tau_c_over_tau_h)) {
+
+        ppw->approx[ppw->index_ap_nuself_tca] = (int)nuself_tca_on;
+        ppw->approx[ppw->index_ap_ncdmfa] = (int)ncdmfa_off;
+      }
+      else {
+        ppw->approx[ppw->index_ap_nuself_tca] = (int)nuself_tca_off;
+
+        if ((ppw->pvecback[pba->index_bg_dmu_nuself_massive]*tau_h <= ppr->ncdm_nuself_fluid_trigger_tau_c_over_tau_h) && (tau/tau_k > ppr->ncdm_fluid_trigger_tau_over_tau_k)) {
 
         ppw->approx[ppw->index_ap_ncdmfa] = (int)ncdmfa_on;
       }
       else {
         ppw->approx[ppw->index_ap_ncdmfa] = (int)ncdmfa_off;
       }
+           }
+   
+        }
+
+        else{
+        
+     if ((tau/tau_k > ppr->ncdm_fluid_trigger_tau_over_tau_k) &&
+          (ppr->ncdm_fluid_approximation != ncdmfa_none)) {
+
+        ppw->approx[ppw->index_ap_ncdmfa] = (int)ncdmfa_on;
+          }
+      else {
+        ppw->approx[ppw->index_ap_ncdmfa] = (int)ncdmfa_off;
+              }
+
+        ppw->approx[ppw->index_ap_nuself_tca] = (int)nuself_tca_off;
     }
+     }
+    //     printf("%e\n",ppw->pvecthermo[pth->index_th_dmu_nuself_massive]);
+    //     printf("ppw->pvecthermo[pth->index_th_dmu_nuself_massive]*tau_h = %e, ppw->approx[ppw->index_ap_nuself_tca] = %d\n",ppw->pvecthermo[pth->index_th_dmu_nuself_massive]*tau_h,ppw->approx[ppw->index_ap_nuself_tca]);
+
+      
   }
 
   /** - for tensor modes: */
@@ -7030,7 +7244,7 @@ int perturbations_total_stress_energy(
 
             rho_delta_ncdm += q2*epsilon*pba->w_ncdm[n_ncdm][index_q]*y[idx];
             rho_plus_p_theta_ncdm += q2*q*pba->w_ncdm[n_ncdm][index_q]*y[idx+1];
-            rho_plus_p_shear_ncdm += q2*q2/epsilon*pba->w_ncdm[n_ncdm][index_q]*y[idx+2];
+            if  (ppw->approx[ppw->index_ap_nuself_tca] == (int)nuself_tca_off) rho_plus_p_shear_ncdm += q2*q2/epsilon*pba->w_ncdm[n_ncdm][index_q]*y[idx+2]; //SG
             delta_p_ncdm += q2*q2/epsilon*pba->w_ncdm[n_ncdm][index_q]*y[idx];
 
             //Jump to next momentum bin:
@@ -8297,7 +8511,7 @@ int perturbations_print_variables(double tau,
 
             rho_delta_ncdm += q2*epsilon*pba->w_ncdm[n_ncdm][index_q]*y[idx];
             rho_plus_p_theta_ncdm += q2*q*pba->w_ncdm[n_ncdm][index_q]*y[idx+1];
-            rho_plus_p_shear_ncdm += q2*q2/epsilon*pba->w_ncdm[n_ncdm][index_q]*y[idx+2];
+            if  (ppw->approx[ppw->index_ap_nuself_tca] == (int)nuself_tca_off) rho_plus_p_shear_ncdm += q2*q2/epsilon*pba->w_ncdm[n_ncdm][index_q]*y[idx+2];
             delta_p_ncdm += q2*q2/epsilon*pba->w_ncdm[n_ncdm][index_q]*y[idx];
 
             //Jump to next momentum bin:
@@ -9493,13 +9707,13 @@ int perturbations_derivs(double tau,
 
           }
 
-                            if ((abs(k-6.549248)<0.1) ){ //
+                            if ((abs(k-6.549248)<0.01) ){ //
 
-        printf("(%e) [%e], %d<->%d, | %e | %e | %e | %e\n",k,tau,ncdm_is_tca,ppw->approx[ppw->index_ap_ncdmfa],y[idx],y[idx+1],y[idx+2],y[idx+3]);
+        // printf("(%e) [%e], %d<->%d, | %e | %e | %e \n",k,tau,ncdm_is_tca,ppw->approx[ppw->index_ap_ncdmfa],y[idx],y[idx+1],y[idx+2]);
                                           }
 
           /** - -----> jump to next species */
-
+        // printf("%d\n",pv->l_max_ncdm[n_ncdm]);
           idx += pv->l_max_ncdm[n_ncdm]+1;
 
         }
@@ -9513,21 +9727,24 @@ int perturbations_derivs(double tau,
 
         for (n_ncdm=0; n_ncdm<pv->N_ncdm; n_ncdm++) {
 
-          if ( pba->has_nuself_massive == _TRUE_) { //SG
-
-        tau_dot_nu = a*pow(pba->Geff/_MeV_to_K/_MeV_to_K,2)*pow(pba->T_ncdm[n_ncdm]*pba->T_cmb/a,5)*_K_to_Mpc_inv_;
-          }
-        
-        if (tau_dot_nu/a_prime_over_a > 1.0e3) {
             
-            ncdm_is_tca = 1; 
 
-        }
-        else {
+        //   if ( pba->has_nuself_massive == _TRUE_) { //SG
+
+        tau_dot_nu = pvecback[pba->index_bg_dmu_nuself_massive];
+        //     //a*pow(pba->Geff/_MeV_to_K/_MeV_to_K,2)*pow(pba->T_ncdm[n_ncdm]*pba->T_cmb/a,5)*_K_to_Mpc_inv_;
+        //   }
+         // if (tau_dot_nu/a_prime_over_a > 1.0e1) tau_dot_nu = 10*a_prime_over_a;
+        // if (tau_dot_nu/a_prime_over_a > 1.0e3) {
+            
+        //     ncdm_is_tca = 1; 
+
+        // }
+        // else {
                 
-            ncdm_is_tca = 0;
+        //     ncdm_is_tca = 0;
 
-            }
+        //     }
           /** - -----> loop over momentum */
 
           for (index_q=0; index_q < pv->q_size_ncdm[n_ncdm]; index_q++) {
@@ -9540,88 +9757,155 @@ int perturbations_derivs(double tau,
             epsilon = sqrt(q*q+a2*pba->M_ncdm[n_ncdm]*pba->M_ncdm[n_ncdm]);
             qk_div_epsilon = k*q/epsilon;
 
-            if ( pba->has_nuself_massive == _TRUE_)  get_collision_int_coeff_massive(ppt,q,ppt->coeff_interp) ; //SG
             
             // printf("%e\t%e\n",q,ppt->coeff_interp[0]);
+
+
+            if (ppw->approx[ppw->index_ap_nuself_tca] == (int)nuself_tca_on) {
+
             /** - -----> ncdm density for given momentum bin */
+
 
             dy[idx] = -qk_div_epsilon*y[idx+1]+metric_continuity*dlnf0_dlnq/3.;
 
             /** - -----> ncdm velocity for given momentum bin */
 
+            dy[idx+1] = qk_div_epsilon/3.0*(y[idx])
+              -epsilon*metric_euler/(3*q*k)*dlnf0_dlnq;
+
+            if ((abs(k-6.549248)<0.1) && (abs(q - 0.2635603)<0.1) ){ //
+                          // if ((abs(q - 0.2635603)<0.1) ){
+
+                // printf("(%e) [%e] , %d<->%d, | %e | %e | %e | %e | %e | %e | %e || {%e} || [%e] \n",k,tau,ncdm_is_tca,ppw->approx[ppw->index_ap_ncdmfa], y[idx],y[idx+1],y[idx+2],y[idx+3],y[idx+pv->l_max_ncdm[n_ncdm]-3],y[idx+pv->l_max_ncdm[n_ncdm]-2],y[idx+pv->l_max_ncdm[n_ncdm]-1],q,tau_dot_nu/a_prime_over_a);
+            // printf("(%e) [%e] , %d<->%d, | %e | %e || {%e} || [%e] || {%e} || {%e} \n",k,tau,ncdm_is_tca,ppw->approx[ppw->index_ap_ncdmfa], y[idx],y[idx+1],q,tau_dot_nu/a_prime_over_a, pvecthermo[pth->index_th_dmu_nuself_massive],pvecback[pba->index_bg_dmu_nuself_massive]);
+                                            }
+            idx += (pv->l_max_ncdm[n_ncdm]+1);
+                
+            }
+
+            else {  // (ppw->approx[ppw->index_ap_nuself_tca] == (int)nuself_tca_off) 
+
+
+             if ( pba->has_nuself_massive == _TRUE_)  get_collision_int_coeff_massive(ppt,q,ppt->coeff_interp) ; //SG
+
+    /** - -----> ncdm density for given momentum bin */
+
+
+            dy[idx] = -qk_div_epsilon*y[idx+1]+metric_continuity*dlnf0_dlnq/3.;
+
+    /** - -----> ncdm velocity for given momentum bin */
+
             dy[idx+1] = qk_div_epsilon/3.0*(y[idx] - 2*s_l[2]*y[idx+2])
               -epsilon*metric_euler/(3*q*k)*dlnf0_dlnq;
 
-                          /** - -----> ncdm shear for given momentum bin */
+    /** - -----> ncdm shear for given momentum bin */
+
+            if ( pba->has_nuself_massive == _TRUE_) dy[idx+2] = qk_div_epsilon/5.0*(2*s_l[2]*y[idx+1]-3.*s_l[3]*y[idx+3])
+              -s_l[2]*metric_shear*2./15.*dlnf0_dlnq - tau_dot_nu*ppt->coeff_interp[2]*y[idx+2];
+
+            if ( pba->has_nuself_massive == _FALSE_) dy[idx+2] = qk_div_epsilon/5.0*(2*s_l[2]*y[idx+1]-3.*s_l[3]*y[idx+3])
+              -s_l[2]*metric_shear*2./15.*dlnf0_dlnq ;
+
+    /** - -----> ncdm l>3 for given momentum bin */
+
+            if ( pba->has_nuself_massive == _TRUE_) {
+
+             for (l=3; l<pv->l_max_ncdm[n_ncdm]; l++){
+              dy[idx+l] = qk_div_epsilon/(2.*l+1.0)*(l*s_l[l]*y[idx+(l-1)]-(l+1.)*s_l[l+1]*y[idx+(l+1)]) - tau_dot_nu*ppt->coeff_interp[l]*y[idx+l];
+             }    
+            }
+            if ( pba->has_nuself_massive == _FALSE_) {
+
+             for (l=3; l<pv->l_max_ncdm[n_ncdm]; l++){
+              dy[idx+l] = qk_div_epsilon/(2.*l+1.0)*(l*s_l[l]*y[idx+(l-1)]-(l+1.)*s_l[l+1]*y[idx+(l+1)]);
+             }    
+              }
+
+
+    /** - -----> ncdm lmax for given momentum bin (truncation as in Ma and Bertschinger)
+                but with curvature taken into account a la arXiv:1305.3261 */
+
+           if ( pba->has_nuself_massive == _TRUE_)  dy[idx+l] = qk_div_epsilon*y[idx+l-1]-(1.+l)*k*cotKgen*y[idx+l] - tau_dot_nu*ppt->coeff_interp[l]*y[idx+l];
+
+            if ( pba->has_nuself_massive == _FALSE_)  
+                dy[idx+l] = qk_div_epsilon*y[idx+l-1]-(1.+l)*k*cotKgen*y[idx+l];
+
+
+            if ((abs(k-6.549248)<0.1) && (abs(q - 0.2635603)<0.1) ){ //
+                          // if ((abs(q - 0.2635603)<0.1) ){
+
+                // printf("(%e) [%e] , %d<->%d, | %e | %e | %e | %e | %e | %e | %e || {%e} || [%e] \n",k,tau,ncdm_is_tca,ppw->approx[ppw->index_ap_ncdmfa], y[idx],y[idx+1],y[idx+2],y[idx+3],y[idx+pv->l_max_ncdm[n_ncdm]-3],y[idx+pv->l_max_ncdm[n_ncdm]-2],y[idx+pv->l_max_ncdm[n_ncdm]-1],q,tau_dot_nu/a_prime_over_a);
+            // printf("(%e) [%e] , %d<->%d, | %e | %e | %e | %e | %e | %e | %e || {%e} || [%e] || {%e} || {%e} \n",k,tau,ncdm_is_tca,ppw->approx[ppw->index_ap_ncdmfa], y[idx],y[idx+1],y[idx+2],y[idx+3],y[idx + 4],y[idx+5],y[idx+6],q,tau_dot_nu/a_prime_over_a, pvecthermo[pth->index_th_dmu_nuself_massive],pvecback[pba->index_bg_dmu_nuself_massive]);
+                                            }
+
+          idx += (pv->l_max_ncdm[n_ncdm]+1);
+                
+
+                
+            }
+
+                
+
+
+
+            // if (ncdm_is_tca == 0) { //SG
+
+            //  //ncdm_tca_safeguard = 1;
+
+            // // if (abs(q-7.085810e+00)<0.1) {   
+            // // printf("q = %e\n", q);
+            // // printf("l = 0 -> %e\n", ppt->coeff_interp[0]);
+            // // printf("l = 1 -> %e\n", ppt->coeff_interp[1]);
+            // // printf("l = 2 -> %e\n", ppt->coeff_interp[2]);
+            // // }
+            
+
+            // // /** - -----> ncdm shear for given momentum bin */
 
             // dy[idx+2] = qk_div_epsilon/5.0*(2*s_l[2]*y[idx+1]-3.*s_l[3]*y[idx+3])
             //   -s_l[2]*metric_shear*2./15.*dlnf0_dlnq - tau_dot_nu*ppt->coeff_interp[2]*y[idx+2];
 
-            if (ncdm_is_tca == 0) { //SG
+            // /** - -----> ncdm l>3 for given momentum bin */
 
-             //ncdm_tca_safeguard = 1;
-
-            // if (abs(q-7.085810e+00)<0.1) {   
-            // printf("q = %e\n", q);
-            // printf("l = 0 -> %e\n", ppt->coeff_interp[0]);
-            // printf("l = 1 -> %e\n", ppt->coeff_interp[1]);
-            // printf("l = 2 -> %e\n", ppt->coeff_interp[2]);
+            // for (l=3; l<pv->l_max_ncdm[n_ncdm]; l++){
+            //   dy[idx+l] = qk_div_epsilon/(2.*l+1.0)*(l*s_l[l]*y[idx+(l-1)]-(l+1.)*s_l[l+1]*y[idx+(l+1)]) - tau_dot_nu*ppt->coeff_interp[l]*y[idx+l];
+            //                 // if (abs(q-7.085810e+00)<0.1) { 
+            // // printf("l = %d -> %e\n", l, ppt->coeff_interp[l]);
+            //                 // }
             // }
-            
+
+            // /** - -----> ncdm lmax for given momentum bin (truncation as in Ma and Bertschinger)
+            //     but with curvature taken into account a la arXiv:1305.3261 */
+
+            // dy[idx+l] = qk_div_epsilon*y[idx+l-1]-(1.+l)*k*cotKgen*y[idx+l] - tau_dot_nu*ppt->coeff_interp[l]*y[idx+l];
+
+            // /** - -----> jump to next momentum bin or species */
+
+            // }
+
+            // if (ncdm_is_tca == 1) {
+
 
             // /** - -----> ncdm shear for given momentum bin */
 
-            dy[idx+2] = qk_div_epsilon/5.0*(2*s_l[2]*y[idx+1]-3.*s_l[3]*y[idx+3])
-              -s_l[2]*metric_shear*2./15.*dlnf0_dlnq - tau_dot_nu*ppt->coeff_interp[2]*y[idx+2];
+            // dy[idx+2] = 0; //qk_div_epsilon/5.0*(2*s_l[2]*y[idx+1]-3.*s_l[3]*y[idx+3])
+            //   //-s_l[2]*metric_shear*2./15.*dlnf0_dlnq - tau_dot_nu*ppt->coeff_interp[2]*y[idx+2];
 
-            /** - -----> ncdm l>3 for given momentum bin */
+            // /** - -----> ncdm l>3 for given momentum bin */
 
-            for (l=3; l<pv->l_max_ncdm[n_ncdm]; l++){
-              dy[idx+l] = qk_div_epsilon/(2.*l+1.0)*(l*s_l[l]*y[idx+(l-1)]-(l+1.)*s_l[l+1]*y[idx+(l+1)]) - tau_dot_nu*ppt->coeff_interp[l]*y[idx+l];
-                            // if (abs(q-7.085810e+00)<0.1) { 
-            // printf("l = %d -> %e\n", l, ppt->coeff_interp[l]);
-                            // }
-            }
+            // for (l=3; l<pv->l_max_ncdm[n_ncdm]; l++){
+            //   //dy[idx+l] = 0; //qk_div_epsilon/(2.*l+1.0)*(l*s_l[l]*y[idx+(l-1)]-(l+1.)*s_l[l+1]*y[idx+(l+1)]) - tau_dot_nu*ppt->coeff_interp[l]*y[idx+l];
+            // }
 
-            /** - -----> ncdm lmax for given momentum bin (truncation as in Ma and Bertschinger)
-                but with curvature taken into account a la arXiv:1305.3261 */
+            // /** - -----> ncdm lmax for given momentum bin (truncation as in Ma and Bertschinger)
+            //     but with curvature taken into account a la arXiv:1305.3261 */
 
-            dy[idx+l] = qk_div_epsilon*y[idx+l-1]-(1.+l)*k*cotKgen*y[idx+l] - tau_dot_nu*ppt->coeff_interp[l]*y[idx+l];
+            // dy[idx+l] = 0;//qk_div_epsilon*y[idx+l-1]-(1.+l)*k*cotKgen*y[idx+l] - tau_dot_nu*ppt->coeff_interp[l]*y[idx+l];
 
-            /** - -----> jump to next momentum bin or species */
+            // /** - -----> jump to next momentum bin or species */
 
-            }
+            // }
 
-            if (ncdm_is_tca == 1) {
-
-
-            /** - -----> ncdm shear for given momentum bin */
-
-            dy[idx+2] = 0; //qk_div_epsilon/5.0*(2*s_l[2]*y[idx+1]-3.*s_l[3]*y[idx+3])
-              //-s_l[2]*metric_shear*2./15.*dlnf0_dlnq - tau_dot_nu*ppt->coeff_interp[2]*y[idx+2];
-
-            /** - -----> ncdm l>3 for given momentum bin */
-
-            for (l=3; l<pv->l_max_ncdm[n_ncdm]; l++){
-              //dy[idx+l] = 0; //qk_div_epsilon/(2.*l+1.0)*(l*s_l[l]*y[idx+(l-1)]-(l+1.)*s_l[l+1]*y[idx+(l+1)]) - tau_dot_nu*ppt->coeff_interp[l]*y[idx+l];
-            }
-
-            /** - -----> ncdm lmax for given momentum bin (truncation as in Ma and Bertschinger)
-                but with curvature taken into account a la arXiv:1305.3261 */
-
-            dy[idx+l] = 0;//qk_div_epsilon*y[idx+l-1]-(1.+l)*k*cotKgen*y[idx+l] - tau_dot_nu*ppt->coeff_interp[l]*y[idx+l];
-
-            /** - -----> jump to next momentum bin or species */
-
-            }
-
-                                            if ((abs(k-6.549248)<0.1) && (abs(q - 7.0)<1.0) ){ //
-
-                // printf("(%e) [%e] , %d<->%d, | %e | %e | %e | %e | %e | %e | %e || {%e} || [%e] \n",k,tau,ncdm_is_tca,ppw->approx[ppw->index_ap_ncdmfa], y[idx],y[idx+1],y[idx+2],y[idx+3],y[idx+pv->l_max_ncdm[n_ncdm]-3],y[idx+pv->l_max_ncdm[n_ncdm]-2],y[idx+pv->l_max_ncdm[n_ncdm]-1],q,tau_dot_nu/a_prime_over_a);
-            printf("(%e) [%e] , %d<->%d, | %e | %e | %e | %e | %e | %e | %e || {%e} || [%e] \n",k,tau,ncdm_is_tca,ppw->approx[ppw->index_ap_ncdmfa], y[idx],y[idx+1],y[idx+2],y[idx+3],y[idx + 4],y[idx+5],y[idx+6],q,tau_dot_nu/a_prime_over_a);
-                                            }
-
-            idx += (pv->l_max_ncdm[n_ncdm]+1);
 
 
               

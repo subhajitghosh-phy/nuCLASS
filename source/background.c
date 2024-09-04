@@ -636,7 +636,15 @@ int background_functions(
                  pba->error_message,
                  pba->error_message);
     }
+    if (pba->has_ncdm == _TRUE_){
+    if ( pba->has_nuself_massive == _TRUE_ ) {  //SG
 
+        pvecback[pba->index_bg_dmu_nuself_massive] = a*pow(pba->Geff/_MeV_to_K/_MeV_to_K,2)*pow(pba->T_ncdm[0]*pba->T_cmb/a,5)*_K_to_Mpc_inv_; // The code currently works with one ncdm species. TODO
+          }
+        else {
+            pvecback[pba->index_bg_dmu_nuself_massive] = 0;
+        }
+    }
     /* one can put other variables here */
     /*  */
     /*  */
@@ -1068,6 +1076,9 @@ int background_indices(
   class_define_index(pba->index_bg_rho_scf,pba->has_scf,index_bg,1);
   class_define_index(pba->index_bg_p_scf,pba->has_scf,index_bg,1);
   class_define_index(pba->index_bg_p_prime_scf,pba->has_scf,index_bg,1);
+
+// SG
+class_define_index(pba->index_bg_dmu_nuself_massive,pba->has_ncdm,index_bg,1);
 
   /* - index for Lambda */
   class_define_index(pba->index_bg_rho_lambda,pba->has_lambda,index_bg,1);

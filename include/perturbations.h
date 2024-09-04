@@ -30,6 +30,7 @@ enum tca_idm_dr_flags {tca_idm_dr_on, tca_idm_dr_off};
 enum rsa_idr_flags {rsa_idr_off, rsa_idr_on};
 enum ufa_flags {ufa_off, ufa_on};
 enum ncdmfa_flags {ncdmfa_off, ncdmfa_on};
+enum ncdm_nuself_tca_flags {nuself_tca_on, nuself_tca_off}; //SG
 
 //@}
 
@@ -638,6 +639,7 @@ struct perturbations_workspace
   int index_ap_rsa_idr; /**< index for dark radiation streaming approximation */
   int index_ap_ufa; /**< index for ur fluid approximation */
   int index_ap_ncdmfa; /**< index for ncdm fluid approximation */
+  int index_ap_nuself_tca; // index for tight coupling approximation for neutrino self interaction
   int ap_size;      /**< number of relevant approximations for a given mode */
 
   int * approx;     /**< array of approximation flags holding at a given time: approx[index_ap] */
@@ -1002,10 +1004,6 @@ extern "C" {
   int free_collision_int_coeff_massless(struct perturbations * ppt);
 
 
-// Conversion factors :SG
-
-#define _K_to_Mpc_inv_ 1.34588e25 /**< K to Mpc^-1 conversion  */
-#define _MeV_to_K   1.16e10 /**< MeV to K conversion  */
 
 
 #ifdef __cplusplus

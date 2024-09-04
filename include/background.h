@@ -198,6 +198,8 @@ struct background
 
   int index_bg_Omega_r;       /**< relativistic density fraction (\f$ \Omega_{\gamma} + \Omega_{\nu r} \f$) */
 
+  int index_bg_dmu_nuself_massive; //SG
+
   /* end of vector in normal format, now quantities in long format */
 
   int index_bg_rho_crit;      /**< critical density */
@@ -636,6 +638,11 @@ extern "C" {
 #define _zeta5_ 1.0369277551433699263313654864570341680570809195019128119741 /**< for quandrature test function */
 
 //@}
+
+// Conversion factors :SG
+
+#define _K_to_Mpc_inv_ 1.34588e25 /**< K to Mpc^-1 conversion  */
+#define _MeV_to_K   1.16e10 /**< MeV to K conversion  */                                           
 
 
 #endif

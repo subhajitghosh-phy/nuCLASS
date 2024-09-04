@@ -212,7 +212,6 @@ int thermodynamics_at_z(
       }
 
     }
-
     /* Quantities related to idr */
     if (pba->has_idr == _TRUE_) {
 
@@ -223,6 +222,7 @@ int thermodynamics_at_z(
       pvecthermo[pth->index_th_dmu_idr] = pth->b_idr*pow((1.+z)/1.e7,pth->n_index_idm_dr)*pba->Omega0_idr*pow(pba->h,2);
     }
   }
+        
 
   /** - interpolate in table with array_interpolate_spline (normal mode) or array_interpolate_spline_growing_closeby (closeby mode) */
 
@@ -1001,6 +1001,10 @@ int thermodynamics_indices(
     class_define_index(pth->index_th_T_idr,pba->has_idr, index_th, 1);
     class_define_index(pth->index_th_dmu_idr,pba->has_idr, index_th, 1);
   }
+
+   if (pba->has_ncdm == _TRUE_){
+       class_define_index(pth->index_th_dmu_nuself_massive,pba->has_ncdm , index_th, 1); //todo: SG
+    } 
 
   /* Quantity defining the stepsize in perturbations.c */
   class_define_index(pth->index_th_rate,_TRUE_,index_th,1);

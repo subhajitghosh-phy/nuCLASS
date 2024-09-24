@@ -6400,7 +6400,8 @@ int perturbations_approximations(
 
         if (pba->has_nuself_massive == _TRUE_){
 
-          if ((ppw->pvecback[pba->index_bg_dmu_nuself_massive]*tau_h > ppr->ncdm_nuself_trigger_tau_c_over_tau_h)) {
+          if ((ppw->pvecback[pba->index_bg_dmu_nuself_massive]*tau_h > 1.0/ppr->ncdm_nuself_trigger_tau_c_over_tau_h) 
+              && (ppw->pvecback[pba->index_bg_dmu_nuself_massive]*tau_k > 1.0/ppr->ncdm_nuself_trigger_tau_c_over_tau_k)) {
 
         ppw->approx[ppw->index_ap_nuself_tca] = (int)nuself_tca_on;
         ppw->approx[ppw->index_ap_ncdmfa] = (int)ncdmfa_off;
@@ -6408,7 +6409,7 @@ int perturbations_approximations(
       else {
         ppw->approx[ppw->index_ap_nuself_tca] = (int)nuself_tca_off;
 
-        if ((ppw->pvecback[pba->index_bg_dmu_nuself_massive]*tau_h <= ppr->ncdm_nuself_fluid_trigger_tau_c_over_tau_h) && (tau/tau_k > ppr->ncdm_fluid_trigger_tau_over_tau_k)) {
+        if ((ppw->pvecback[pba->index_bg_dmu_nuself_massive]*tau < 1.0/ppr->ncdm_nuself_fluid_trigger_tau_c_over_tau) && (tau/tau_k > ppr->ncdm_fluid_trigger_tau_over_tau_k)) {
 
         ppw->approx[ppw->index_ap_ncdmfa] = (int)ncdmfa_on;
       }

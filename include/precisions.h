@@ -396,12 +396,12 @@ class_precision_parameter(ncdm_fluid_trigger_tau_over_tau_k,double,31.0)
 //SG
 // ncdm nuself tight coupling trigger dmu/(aH) = 1e3
 
-class_precision_parameter(ncdm_nuself_trigger_tau_c_over_tau_h,double,1.0e3)
-class_precision_parameter(ncdm_nuself_trigger_tau_c_over_tau_k,double,0.01)
+class_precision_parameter(ncdm_nuself_trigger_tau_c_over_tau_h,double,0.000015)
+class_precision_parameter(ncdm_nuself_trigger_tau_c_over_tau_k,double,0.00001)
 //SG
 // ncdm fluid approximation trigger in presence of nuself
 
-class_precision_parameter(ncdm_nuself_fluid_trigger_tau_c_over_tau_h,double,1.0e-4)
+class_precision_parameter(ncdm_nuself_fluid_trigger_tau_c_over_tau,double,100.0)
 /**
  * whether CMB source functions can be approximated as zero when
  * visibility function g(tau) is tiny

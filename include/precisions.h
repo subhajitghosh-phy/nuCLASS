@@ -401,7 +401,7 @@ class_precision_parameter(ncdm_nuself_trigger_tau_c_over_tau_k,double,0.00001)
 //SG
 // ncdm fluid approximation trigger in presence of nuself
 
-class_precision_parameter(ncdm_nuself_fluid_trigger_tau_c_over_tau,double,100.0)
+class_precision_parameter(ncdm_nuself_fluid_trigger_tau_c_over_tau,double,1e5)
 /**
  * whether CMB source functions can be approximated as zero when
  * visibility function g(tau) is tiny

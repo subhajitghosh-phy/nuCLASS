@@ -1,3 +1,16 @@
+nuCLASS
+==============================================
+CLASS code for computing various neutrino interaction scenarios.
+
+Current version: Massive neutrino self-interaction (following arXiv:1902.00534)
+
+You can use nuCLASS freely, provided that in your publications, you cite
+1. CLASS papers (see below)
+2. `The Neutrino Puzzle: Anomalies, Interactions, and Cosmological Tensions (https://arxiv.org/abs/1902.00534)`
+3. `Joint 21-cm and CMB Forecasts for Constraining Self-Interacting Massive Neutrinos (https://arxiv.org/abs/2504.xxxxx)`
+
+
+
 CLASS: Cosmic Linear Anisotropy Solving System  {#mainpage}
 ==============================================
 
